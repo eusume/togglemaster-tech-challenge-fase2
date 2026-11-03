@@ -1,0 +1,10 @@
+{
+    "metadata":  {
+                     "name":  "togglemaster",
+                     "labels":  {
+                                    "app.kubernetes.io/part-of":  "togglemaster"
+                                }
+                 },
+    "apiVersion":  "v1",
+    "kind":  "Namespace"
+}

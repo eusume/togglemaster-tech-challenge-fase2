@@ -1,0 +1,25 @@
+{
+    "spec":  {
+                 "selector":  {
+                                  "app.kubernetes.io/name":  "auth-service"
+                              },
+                 "ports":  [
+                               {
+                                   "port":  8001,
+                                   "protocol":  "TCP",
+                                   "name":  "http",
+                                   "targetPort":  "http"
+                               }
+                           ],
+                 "type":  "ClusterIP"
+             },
+    "metadata":  {
+                     "name":  "auth-service",
+                     "namespace":  "togglemaster",
+                     "labels":  {
+                                    "app.kubernetes.io/part-of":  "togglemaster"
+                                }
+                 },
+    "apiVersion":  "v1",
+    "kind":  "Service"
+}

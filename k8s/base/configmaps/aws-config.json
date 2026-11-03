@@ -1,0 +1,20 @@
+{
+    "metadata":  {
+                     "name":  "aws-config",
+                     "namespace":  "togglemaster",
+                     "labels":  {
+                                    "app.kubernetes.io/part-of":  "togglemaster"
+                                }
+                 },
+    "apiVersion":  "v1",
+    "data":  {
+                 "AWS_REGION":  "REPLACE_AWS_REGION",
+                 "AWS_SQS_URL":  "REPLACE_SQS_QUEUE_URL",
+                 "AWS_DYNAMODB_TABLE":  "ToggleMasterAnalytics",
+                 "AWS_ENDPOINT_URL_SQS":  "",
+                 "AWS_ENDPOINT_URL_DYNAMODB":  "",
+                 "AWS_EC2_METADATA_DISABLED":  "true",
+                 "AWS_STS_REGIONAL_ENDPOINTS":  "regional"
+             },
+    "kind":  "ConfigMap"
+}

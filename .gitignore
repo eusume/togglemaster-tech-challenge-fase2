@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+*.kubeconfig
+kubeconfig
+k8s/private/
+k8s/overlays/eks-local/
+k8s/rendered/
+local-evidence/
+*.tfstate
+*.tfstate.*

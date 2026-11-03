@@ -1,0 +1,82 @@
+{
+    "spec":  {
+                 "ingressClassName":  "alb",
+                 "rules":  [
+                               {
+                                   "host":  "admin.togglemaster.example.invalid",
+                                   "http":  {
+                                                "paths":  [
+                                                              {
+                                                                  "path":  "/admin/keys",
+                                                                  "pathType":  "Exact",
+                                                                  "backend":  {
+                                                                                  "service":  {
+                                                                                                  "name":  "auth-service",
+                                                                                                  "port":  {
+                                                                                                               "name":  "http"
+                                                                                                           }
+                                                                                              }
+                                                                              }
+                                                              },
+                                                              {
+                                                                  "path":  "/validate",
+                                                                  "pathType":  "Exact",
+                                                                  "backend":  {
+                                                                                  "service":  {
+                                                                                                  "name":  "auth-service",
+                                                                                                  "port":  {
+                                                                                                               "name":  "http"
+                                                                                                           }
+                                                                                              }
+                                                                              }
+                                                              },
+                                                              {
+                                                                  "path":  "/flags",
+                                                                  "pathType":  "Prefix",
+                                                                  "backend":  {
+                                                                                  "service":  {
+                                                                                                  "name":  "flag-service",
+                                                                                                  "port":  {
+                                                                                                               "name":  "http"
+                                                                                                           }
+                                                                                              }
+                                                                              }
+                                                              },
+                                                              {
+                                                                  "path":  "/rules",
+                                                                  "pathType":  "Prefix",
+                                                                  "backend":  {
+                                                                                  "service":  {
+                                                                                                  "name":  "targeting-service",
+                                                                                                  "port":  {
+                                                                                                               "name":  "http"
+                                                                                                           }
+                                                                                              }
+                                                                              }
+                                                              }
+                                                          ]
+                                            }
+                               }
+                           ]
+             },
+    "metadata":  {
+                     "name":  "togglemaster-management",
+                     "namespace":  "togglemaster",
+                     "labels":  {
+                                    "app.kubernetes.io/part-of":  "togglemaster"
+                                },
+                     "annotations":  {
+                                         "alb.ingress.kubernetes.io/target-type":  "ip",
+                                         "alb.ingress.kubernetes.io/healthcheck-path":  "/health",
+                                         "alb.ingress.kubernetes.io/healthcheck-port":  "traffic-port",
+                                         "alb.ingress.kubernetes.io/success-codes":  "200",
+                                         "alb.ingress.kubernetes.io/listen-ports":  "[{\"HTTPS\":443}]",
+                                         "alb.ingress.kubernetes.io/certificate-arn":  "REPLACE_ACM_CERTIFICATE_ARN",
+                                         "alb.ingress.kubernetes.io/ssl-policy":  "ELBSecurityPolicy-TLS13-1-2-2021-06",
+                                         "alb.ingress.kubernetes.io/scheme":  "internal",
+                                         "alb.ingress.kubernetes.io/inbound-cidrs":  "127.0.0.1/32"
+                                     }
+                 },
+    "apiVersion":  "networking.k8s.io/v1",
+    "kind":  "Ingress"
+}

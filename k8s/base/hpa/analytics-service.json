@@ -1,0 +1,54 @@
+{
+    "spec":  {
+                 "scaleTargetRef":  {
+                                        "name":  "analytics-service",
+                                        "apiVersion":  "apps/v1",
+                                        "kind":  "Deployment"
+                                    },
+                 "minReplicas":  1,
+                 "metrics":  [
+                                 {
+                                     "resource":  {
+                                                      "target":  {
+                                                                     "averageUtilization":  60,
+                                                                     "type":  "Utilization"
+                                                                 },
+                                                      "name":  "cpu"
+                                                  },
+                                     "type":  "Resource"
+                                 }
+                             ],
+                 "maxReplicas":  3,
+                 "behavior":  {
+                                  "scaleDown":  {
+                                                    "stabilizationWindowSeconds":  300,
+                                                    "policies":  [
+                                                                     {
+                                                                         "periodSeconds":  60,
+                                                                         "value":  1,
+                                                                         "type":  "Pods"
+                                                                     }
+                                                                 ]
+                                                },
+                                  "scaleUp":  {
+                                                  "stabilizationWindowSeconds":  0,
+                                                  "policies":  [
+                                                                   {
+                                                                       "periodSeconds":  60,
+                                                                       "value":  1,
+                                                                       "type":  "Pods"
+                                                                   }
+                                                               ]
+                                              }
+                              }
+             },
+    "metadata":  {
+                     "name":  "analytics-service",
+                     "namespace":  "togglemaster",
+                     "labels":  {
+                                    "app.kubernetes.io/part-of":  "togglemaster"
+                                }
+                 },
+    "apiVersion":  "autoscaling/v2",
+    "kind":  "HorizontalPodAutoscaler"
+}

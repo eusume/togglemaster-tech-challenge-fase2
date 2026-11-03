@@ -1,0 +1,12 @@
+{
+    "automountServiceAccountToken":  false,
+    "metadata":  {
+                     "name":  "flag-service",
+                     "namespace":  "togglemaster",
+                     "labels":  {
+                                    "app.kubernetes.io/part-of":  "togglemaster"
+                                }
+                 },
+    "apiVersion":  "v1",
+    "kind":  "ServiceAccount"
+}

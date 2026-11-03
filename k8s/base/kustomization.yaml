@@ -1,0 +1,33 @@
+{
+    "namespace":  "togglemaster",
+    "apiVersion":  "kustomize.config.k8s.io/v1beta1",
+    "resources":  [
+                      "namespace.json",
+                      "configmaps/aws-config.json",
+                      "configmaps/auth-service.json",
+                      "serviceaccounts/auth-service.json",
+                      "deployments/auth-service.json",
+                      "services/auth-service.json",
+                      "configmaps/flag-service.json",
+                      "serviceaccounts/flag-service.json",
+                      "deployments/flag-service.json",
+                      "services/flag-service.json",
+                      "configmaps/targeting-service.json",
+                      "serviceaccounts/targeting-service.json",
+                      "deployments/targeting-service.json",
+                      "services/targeting-service.json",
+                      "configmaps/evaluation-service.json",
+                      "serviceaccounts/evaluation-service.json",
+                      "deployments/evaluation-service.json",
+                      "services/evaluation-service.json",
+                      "configmaps/analytics-service.json",
+                      "serviceaccounts/analytics-service.json",
+                      "deployments/analytics-service.json",
+                      "services/analytics-service.json",
+                      "hpa/evaluation-service.json",
+                      "hpa/analytics-service.json",
+                      "ingress/public.json",
+                      "ingress/management.json"
+                  ],
+    "kind":  "Kustomization"
+}

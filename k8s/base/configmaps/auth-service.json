@@ -1,0 +1,14 @@
+{
+    "metadata":  {
+                     "name":  "auth-service-config",
+                     "namespace":  "togglemaster",
+                     "labels":  {
+                                    "app.kubernetes.io/part-of":  "togglemaster"
+                                }
+                 },
+    "apiVersion":  "v1",
+    "data":  {
+                 "PORT":  "8001"
+             },
+    "kind":  "ConfigMap"
+}

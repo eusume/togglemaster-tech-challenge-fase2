@@ -1,0 +1,25 @@
+{
+    "spec":  {
+                 "selector":  {
+                                  "app.kubernetes.io/name":  "evaluation-service"
+                              },
+                 "ports":  [
+                               {
+                                   "port":  8004,
+                                   "protocol":  "TCP",
+                                   "name":  "http",
+                                   "targetPort":  "http"
+                               }
+                           ],
+                 "type":  "ClusterIP"
+             },
+    "metadata":  {
+                     "name":  "evaluation-service",
+                     "namespace":  "togglemaster",
+                     "labels":  {
+                                    "app.kubernetes.io/part-of":  "togglemaster"
+                                }
+                 },
+    "apiVersion":  "v1",
+    "kind":  "Service"
+}
