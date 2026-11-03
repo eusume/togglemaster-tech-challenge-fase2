@@ -32,7 +32,7 @@ analytics-service (upstream FIAP-TCs): https://github.com/FIAP-TCs/analytics-ser
 Os links dos microsserviços apontam para os projetos FIAP-TCs; não são cópias
 publicadas como repositórios próprios. Não foi identificada autorização
 explícita de redistribuição.
-Commit inicial do snapshot público:
+Commit inicial do snapshot público: 31681a3f0ac6376356b5aa987a4053872ed2f358
 
 4. VÍDEO
 
@@ -108,11 +108,12 @@ O máximo de 2 réplicas respeita a capacidade de 2 nós t3.medium.
 
 VALIDADO NA NUVEM (01/11/2026): requisitos técnicos registrados nas evidências.
 VALIDADO LOCALMENTE: Compose com nove containers e kind (histórico).
-PENDENTE: vídeo e dados dos participantes. Confirmar que o repositório público
-acima abre sem autenticação e preencher o commit inicial depois da publicação.
-Os links dos microsserviços são referências aos upstreams, não publicações
-próprias. A revisão atual (03/11) não confirmou o estado cloud ao vivo; não
-declarar disponibilidade atual sem nova leitura.
+Repositório público acima: publicado e verificado em 03/11/2026; o README e
+todos os seus links relativos responderam HTTP 200 sem autenticação.
+PENDENTE: vídeo e dados dos participantes. Os links dos microsserviços são
+referências aos upstreams, não publicações próprias. A revisão atual (03/11)
+não confirmou o estado cloud ao vivo; não declarar disponibilidade atual sem
+nova leitura.
 
 9. LIMITAÇÕES E OCORRÊNCIAS
 
@@ -142,7 +143,7 @@ como validação local anterior.
 10. CONFERÊNCIA FINAL
 
 Participantes/RM/Discord preenchidos: PENDENTE — depende dos dados pessoais
-Repositório público acessível: PENDENTE — confirmar após publicação
+Repositório público acessível: SIM — README e links relativos verificados anonimamente
 Vídeo acessível e duração dentro do limite: PENDENTE — depende do vídeo
 Evidências cloud conferidas e lacunas declaradas: SIM, evidência datada de 01/11
 Revisão de credenciais/dados sensíveis concluída: SIM, escopo documentado
