@@ -38,11 +38,11 @@ Data da gravação informada pelo participante: 03/11/2026
 Limite oficial: 20 minutos.
 
 Verificação sem autenticação em 03/11/2026: página HTTP 200; o endpoint
-público do player informou playabilityStatus=OK e 420 segundos. O navegador
-integrado de revisão não reproduziu o embed (erro 153 por contexto/referrer).
-Assim, URL, disponibilidade declarada pelo player e duração foram verificadas
-por metadata, mas o conteúdo integral do vídeo não foi assistido nesta revisão.
-O participante deve confirmar a reprodução em janela anônima antes de submeter.
+público do player informou playabilityStatus=OK e 420 segundos. O participante
+confirmou que a reprodução inicia e prossegue normalmente em janela anônima.
+O navegador integrado de revisão não reproduziu o embed (erro 153 por
+contexto/referrer), portanto o conteúdo integral não foi assistido nesta
+revisão.
 
 4. TECNOLOGIAS
 
@@ -237,7 +237,8 @@ demonstração visual não pôde ser confirmada.
 Participante, RM, Discord e responsável: preenchidos com os dados informados.
 Turma: não informada; não presumida.
 Repositório público e links: verificados sem autenticação em 03/11/2026.
-Vídeo: metadata acessível; 420 segundos; confirmar reprodução em janela
-anônima, pois o player integrado da auditoria retornou erro 153.
+Vídeo: metadata acessível; 420 segundos; reprodução confirmada pelo
+participante em janela anônima. O player integrado da auditoria retornou erro
+153 e o conteúdo integral não foi inspecionado pelo revisor.
 Relatório: preparado; não significa submissão no portal FIAP.
 Submissão final pelo portal: a ser realizada pelo participante.
