@@ -1,0 +1,243 @@
+RELATÓRIO DE ENTREGA — TECH CHALLENGE FASE 2
+
+Instituição: FIAP — Pós-Tech DevOps & Cloud Engineering
+Projeto: ToggleMaster — Infraestrutura de Microsserviços e Kubernetes
+Data: 03/11/2026
+Turma: Não informada
+
+1. PARTICIPANTE E RESPONSÁVEL
+
+Nome: Elson Antônio dos Santos Fernandes Junior
+RM: RM375679
+Discord: xsumee
+Responsável pela submissão: Elson Antônio dos Santos Fernandes Junior
+Não foram informados outros participantes.
+
+2. REPOSITÓRIOS
+
+Repositório público de infraestrutura e documentação:
+https://github.com/eusume/togglemaster-tech-challenge-fase2
+
+Referências aos upstreams FIAP-TCs (não são repositórios de autoria própria):
+- auth-service: https://github.com/FIAP-TCs/auth-service
+- flag-service: https://github.com/FIAP-TCs/flag-service
+- targeting-service: https://github.com/FIAP-TCs/targeting-service
+- evaluation-service: https://github.com/FIAP-TCs/evaluation-service
+- analytics-service: https://github.com/FIAP-TCs/analytics-service
+
+O repositório público contém infraestrutura, manifests, Compose, Dockerfiles
+autoriais e documentação; não contém os fontes dos cinco serviços. O commit
+inicial do snapshot limpo foi 31681a3f0ac6376356b5aa987a4053872ed2f358.
+
+3. VÍDEO DE DEMONSTRAÇÃO
+
+Link: https://youtu.be/gI_EZXb2YFE
+Título exibido pelo YouTube: ToggleMaster Tech Challenge Fase2 FINAL
+Duração: aproximadamente 7 minutos (metadata pública: 420 segundos)
+Data da gravação informada pelo participante: 03/11/2026
+Limite oficial: 20 minutos.
+
+Verificação sem autenticação em 03/11/2026: página HTTP 200; o endpoint
+público do player informou playabilityStatus=OK e 420 segundos. O navegador
+integrado de revisão não reproduziu o embed (erro 153 por contexto/referrer).
+Assim, URL, disponibilidade declarada pelo player e duração foram verificadas
+por metadata, mas o conteúdo integral do vídeo não foi assistido nesta revisão.
+O participante deve confirmar a reprodução em janela anônima antes de submeter.
+
+4. TECNOLOGIAS
+
+- Docker e Docker Compose
+- Kubernetes e Amazon EKS
+- Amazon ECR
+- NGINX Ingress
+- Horizontal Pod Autoscaler (HPA)
+- PostgreSQL e Amazon RDS
+- Redis e Amazon ElastiCache
+- Amazon SQS e Amazon DynamoDB
+- Go e Python
+
+5. REQUISITOS FIAP E CLASSIFICAÇÃO DAS EVIDÊNCIAS
+
+O PDF oficial do Tech Challenge Fase 2 (11 páginas) foi lido. As páginas 4–10
+pedem cinco Dockerfiles, Compose com nove contêineres, cluster Kubernetes,
+cinco serviços, NGINX Ingress, ambos os HPAs, SQS, DynamoDB, explicação da
+arquitetura e relatório/vídeo de até 20 minutos.
+
+Categorias:
+A — demonstrado no vídeo. O link/metadata são acessíveis, mas as cenas e
+comandos não foram inspecionados individualmente pelo revisor. Não se marca
+um requisito como observado ao vivo apenas com base no título/duração.
+B — comprovado por evidência histórica pública: resumo sanitizado datado de
+01/11/2026 e documentação pública.
+C — registrado somente em arquivos ou verificações locais, não como evidência
+publicada: execução Compose anterior e logs/diagnósticos brutos.
+D — não comprovado nesta revisão: execução ao vivo atual ou cena específica
+do vídeo sem confirmação direta. Isso não afirma que nunca ocorreu.
+
+Docker Compose: cinco aplicações + quatro dependências, total nove:
+A: não verificado cena a cena.
+B: configuração docker-compose.yml pública; ela não inclui os fontes.
+C: execução local anterior registrada com 9/9 contêineres running/healthy.
+D: este snapshot sozinho não reconstrói os builds; requer fontes e alterações
+   locais dos serviços.
+
+Cinco microsserviços:
+A: aparição e contagem individual não verificadas no vídeo.
+B: resumo público EKS registra os cinco serviços implantados; README aponta
+   para os cinco upstreams FIAP-TCs.
+C: builds/execuções das versões de trabalho ficam nos repositórios locais.
+D: fontes e patches FIAP não estão neste repositório público.
+
+Cluster EKS e Pods:
+A: apresentação visual não inspecionada.
+B: evidência pública de 01/11 registra EKS Kubernetes 1.37, dois nós Ready e
+   cinco microsserviços disponíveis.
+C: inventário e logs brutos de cluster estão locais.
+D: disponibilidade atual não foi revalidada em 03/11.
+
+NGINX Ingress:
+A: chamada feita durante o vídeo não verificada pelo revisor.
+B: evidência histórica pública registra NLB → NGINX → cinco health checks
+   HTTP 200 roteados por Host.
+C: logs detalhados permanecem locais.
+D: endpoint não consultado ao vivo nesta revisão.
+
+HPA do evaluation-service:
+A: geração de carga e observação ao vivo no vídeo não verificadas.
+B: evidência pública registra alvo de 120 req/s, 49.893 respostas, zero
+   falhas, scale-out de uma para duas réplicas e scale-down posterior.
+C: séries HPA e logs detalhados permanecem locais.
+D: nenhuma nova carga foi executada; não é resultado atual.
+
+HPA do analytics-service:
+A: envio de mensagens e observação ao vivo no vídeo não verificados.
+B: evidência pública registra processamento de eventos, scale-out de uma para
+   duas réplicas e scale-down posterior.
+C: logs detalhados do HPA e worker permanecem locais.
+D: nenhum envio/carga foi executado nesta revisão.
+
+SQS e DynamoDB:
+A: comandos e itens apresentados ao vivo não verificados.
+B: resumo público registra evaluation → SQS → analytics → DynamoDB, seis
+   eventos correlacionados, idempotência (duas mensagens com identidade lógica
+   igual resultaram em um item) e um envio manual consumido.
+C: IDs, payloads e registros brutos continuam locais.
+D: nenhuma mensagem foi enviada e nenhum item foi gravado nesta revisão.
+
+RDS PostgreSQL e ElastiCache Redis:
+A: demonstração ao vivo não verificada.
+B: evidência pública registra três instâncias PostgreSQL independentes usadas
+   pelos serviços e Cache MISS/HIT no Redis durante evaluation.
+C: registros técnicos brutos detalhados permanecem locais.
+D: dependências não foram consultadas ao vivo nesta revisão.
+
+Arquitetura, limitações AWS Academy e justificativa do HPA por CPU:
+A: explicação oral correspondente não foi inspecionada cena a cena.
+B: README, roteiro e resumo público descrevem fluxo, limitações de IAM/sessão e
+   autoscaling histórico.
+C: diagnósticos detalhados e checkpoints do laboratório permanecem locais.
+D: não se declara que cada tópico tenha sido explicado oralmente no vídeo.
+
+6. AMBIENTE E RESULTADOS HISTÓRICOS
+
+Ambiente: AWS Academy Learner Lab, região us-east-1, EKS Kubernetes 1.37;
+namespace togglemaster e controller NGINX no namespace nginx-ingress; release
+fase2-20261030-rc1. Dois nós t3.medium/AL2023. Validação coletada em
+01/11/2026, aproximadamente 05:30–06:20 UTC. Esses dados são históricos,
+não uma verificação de estado presente.
+
+- Dois nós Ready e cinco microsserviços implantados.
+- NGINX Ingress por Load Balancer; cinco rotas de health check aprovadas.
+- Três RDS PostgreSQL 16.15 independentes, privados, criptografados e com
+  TLS verify-full; Redis/ElastiCache 7.1 com TLS e AUTH.
+- Evaluation: decisões PERCENTAGE 100/0, kill switch, flag ausente e
+  Cache MISS/HIT registrados.
+- Evaluation → SQS Standard → analytics → DynamoDB: seis eventos
+  correlacionados e persistência idempotente por event_id; envio manual à fila
+  foi consumido.
+- DynamoDB ToggleMasterAnalytics com chave event_id e billing PAY_PER_REQUEST;
+  fila SQS Standard togglemaster-events.
+- Carga histórica: 49.893 respostas, zero falhas, alvo de 120 req/s.
+  Evaluation e analytics escalaram de uma para duas réplicas e retornaram a uma.
+- HPA: evaluation CPU target 70%, analytics CPU target 60%, min 1/max 2.
+- Cinco imagens ECR e digests da release: auth 1409d82b, flag 685c6aac,
+  targeting 24b5cf66, evaluation 72ba5f39 e analytics e39533ef.
+
+7. ARQUITETURA E ESCALABILIDADE
+
+Auth valida chaves; flag mantém definições; targeting mantém regras de
+segmentação; evaluation decide a flag, usa Redis como cache e publica eventos
+em SQS; analytics consome eventos e persiste no DynamoDB com escrita
+condicional por event_id.
+
+PostgreSQL/RDS é persistência relacional dos dados operacionais.
+Redis/ElastiCache é cache temporário de avaliação. DynamoDB é persistência
+NoSQL dos eventos de analytics. São responsabilidades distintas.
+
+O HPA por CPU para evaluation e analytics foi usado como workaround compatível
+com as restrições de IAM do AWS Academy; o requisito mínimo do PDF pede HPA
+por CPU para os dois serviços nessa opção. O PDF descreve KEDA como opção
+recomendada/opcional em conta pessoal para escalar analytics pela fila SQS.
+CPU é uma métrica suportada pelo HPA/metrics-server; para analytics, processar
+a fila aumenta CPU e permite escala, mas não mede diretamente a profundidade
+da fila. Escalar Pods não cria nós nem escala RDS.
+
+8. CONTEINERIZAÇÃO E LIMITAÇÃO DE REPRODUÇÃO
+
+O Compose original de infraestrutura, os cinco Dockerfiles e o script
+setup-local.ps1, cuja proveniência foi verificada em commits locais atribuídos
+ao participante, foram incluídos no repositório público. O script gera valores
+aleatórios para `.env` local e não imprime esses valores; nenhum `.env` foi
+publicado. A auditoria dos arquivos não encontrou chaves AWS, ARNs, IDs de
+conta, JWTs, chaves privadas ou DNS de recursos. Os valores AWS literais
+"local" no Compose são placeholders destinados a emuladores locais.
+
+Os diretórios de código FIAP-TCs foram excluídos. O Compose pressupõe os cinco
+diretórios de serviço, arquivos deles e valores locais em ambiente; as versões
+executadas também tinham alterações locais que não foram redistribuídas sem
+autorização. Portanto, clonar somente o snapshot não basta para executar os
+nove contêineres. O histórico de execução local 9/9 healthy existe, mas a
+reprodutibilidade do Compose público depende de obter legalmente os fontes e
+aplicar as alterações locais corretas.
+
+9. LIMITAÇÕES AWS ACADEMY E DURABILIDADE
+
+- Permissões IAM negadas impediram IRSA/Pod Identity; evaluation/analytics
+  dependeram de credenciais temporárias em Secret, renovadas a cada sessão.
+- O ciclo do laboratório interrompe instâncias; foram documentadas falhas de
+  bootstrap dos nós substitutos por restrição organizacional e recuperação em
+  sessão ativa.
+- O cluster não teve estado ao vivo revalidado após 01/11/2026.
+- Não há outbox durável: falha definitiva antes de publicar pode perder um
+  evento; idempotência evita gravações duplicadas, mas não garante entrega.
+- Três registros duplicados históricos foram preservados; não foi feita
+  limpeza retroativa.
+- O Ingress de exemplo nos manifests permite 0.0.0.0/0; é template e precisa
+  ser restringido antes de qualquer implantação.
+
+10. SITUAÇÃO FINAL E REQUISITOS NÃO ATENDIDOS
+
+Situação final dos bloqueios: Os requisitos técnicos foram validados em sessão
+AWS Academy em 01/11/2026. A disponibilidade posterior do ambiente não foi
+revalidada. As limitações de IAM, credenciais temporárias e ciclo de vida do
+laboratório permanecem documentadas.
+
+Requisitos não atendidos: Não foram identificadas lacunas técnicas nas
+evidências históricas registradas. Entretanto, algumas demonstrações
+solicitadas no enunciado são apresentadas no vídeo por documentação, e não por
+execução ao vivo. Não afirmar conformidade integral do vídeo sem comprovação.
+
+Complemento de precisão: o revisor confirmou URL pública, metadata do player
+e duração de 420 segundos, mas não assistiu ao vídeo integralmente. A
+classificação acima separa validação histórica, arquivos locais e itens cuja
+demonstração visual não pôde ser confirmada.
+
+11. CONFERÊNCIA FINAL
+
+Participante, RM, Discord e responsável: preenchidos com os dados informados.
+Turma: não informada; não presumida.
+Repositório público e links: verificados sem autenticação em 03/11/2026.
+Vídeo: metadata acessível; 420 segundos; confirmar reprodução em janela
+anônima, pois o player integrado da auditoria retornou erro 153.
+Relatório: preparado; não significa submissão no portal FIAP.
+Submissão final pelo portal: a ser realizada pelo participante.

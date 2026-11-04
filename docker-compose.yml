@@ -1,0 +1,178 @@
+name: togglemaster-local
+
+x-health: &health
+  interval: 10s
+  timeout: 5s
+  retries: 12
+  start_period: 20s
+
+x-aws-local: &aws-local
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  AWS_SESSION_TOKEN: ""
+  AWS_EC2_METADATA_DISABLED: "true"
+  AWS_ENDPOINT_URL_SQS: http://sqs:5000
+  AWS_ENDPOINT_URL_DYNAMODB: http://dynamodb:8000
+  AWS_DYNAMODB_TABLE: ToggleMasterAnalytics
+
+services:
+  postgres-auth:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_USER: togglemaster
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Execute scripts/setup-local.ps1}
+      POSTGRES_DB: auth_db
+      SERVICE_API_KEY: ${SERVICE_API_KEY:?Execute scripts/setup-local.ps1}
+    volumes:
+      - auth-data:/var/lib/postgresql/data
+      - ./auth-service/db/init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./infra/postgres/auth-key.sh:/docker-entrypoint-initdb.d/02-key.sh:ro
+    healthcheck:
+      <<: *health
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+    networks: [local]
+    restart: unless-stopped
+
+  postgres-data:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_USER: togglemaster
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Execute scripts/setup-local.ps1}
+      POSTGRES_DB: postgres
+    volumes:
+      - service-data:/var/lib/postgresql/data
+      - ./infra/postgres/data-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
+      - ./flag-service/db/init.sql:/opt/sql/flags.sql:ro
+      - ./targeting-service/db/init.sql:/opt/sql/targeting.sql:ro
+    healthcheck:
+      <<: *health
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d flags_db && pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d targeting_db']
+    networks: [local]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: [redis-server, --appendonly, "yes"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      <<: *health
+      test: [CMD, redis-cli, ping]
+    networks: [local]
+    restart: unless-stopped
+
+  dynamodb:
+    image: amazon/dynamodb-local:2.6.1
+    command: [-jar, DynamoDBLocal.jar, -sharedDb, -dbPath, /home/dynamodblocal/data]
+    user: "0:0"
+    working_dir: /home/dynamodblocal
+    volumes: [dynamodb-data:/home/dynamodblocal/data]
+    healthcheck:
+      <<: *health
+      test: [CMD-SHELL, 'bash -c "echo > /dev/tcp/127.0.0.1/8000"']
+    networks: [local]
+    restart: unless-stopped
+
+  auth-service:
+    image: togglemaster-auth:local
+    build: ./auth-service
+    environment:
+      PORT: "8001"
+      DATABASE_URL: postgres://togglemaster:${POSTGRES_PASSWORD}@postgres-auth:5432/auth_db?sslmode=disable
+      MASTER_KEY: ${MASTER_KEY:?Execute scripts/setup-local.ps1}
+    ports: ["127.0.0.1:8001:8001"]
+    depends_on:
+      postgres-auth: {condition: service_healthy}
+    healthcheck:
+      <<: *health
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8001/health]
+    networks: [local, access]
+    restart: unless-stopped
+
+  flag-service:
+    image: togglemaster-flag:local
+    build: ./flag-service
+    environment:
+      PORT: "8002"
+      DATABASE_URL: postgres://togglemaster:${POSTGRES_PASSWORD}@postgres-data:5432/flags_db?sslmode=disable
+      AUTH_SERVICE_URL: http://auth-service:8001
+    ports: ["127.0.0.1:8002:8002"]
+    depends_on:
+      postgres-data: {condition: service_healthy}
+      auth-service: {condition: service_healthy}
+    healthcheck:
+      <<: *health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+    networks: [local, access]
+    restart: unless-stopped
+
+  targeting-service:
+    image: togglemaster-targeting:local
+    build: ./targeting-service
+    environment:
+      PORT: "8003"
+      DATABASE_URL: postgres://togglemaster:${POSTGRES_PASSWORD}@postgres-data:5432/targeting_db?sslmode=disable
+      AUTH_SERVICE_URL: http://auth-service:8001
+    ports: ["127.0.0.1:8003:8003"]
+    depends_on:
+      postgres-data: {condition: service_healthy}
+      auth-service: {condition: service_healthy}
+    healthcheck:
+      <<: *health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health', timeout=3)"]
+    networks: [local, access]
+    restart: unless-stopped
+
+  evaluation-service:
+    image: togglemaster-evaluation:local
+    build: ./evaluation-service
+    environment:
+      <<: *aws-local
+      PORT: "8004"
+      REDIS_URL: redis://redis:6379/0
+      FLAG_SERVICE_URL: http://flag-service:8002
+      TARGETING_SERVICE_URL: http://targeting-service:8003
+      SERVICE_API_KEY: ${SERVICE_API_KEY:?Execute scripts/setup-local.ps1}
+      AWS_SQS_URL: ""
+    ports: ["127.0.0.1:8004:8004"]
+    depends_on:
+      redis: {condition: service_healthy}
+      flag-service: {condition: service_healthy}
+      targeting-service: {condition: service_healthy}
+    healthcheck:
+      <<: *health
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8004/health]
+    networks: [local, access]
+    restart: unless-stopped
+
+  analytics-service:
+    image: togglemaster-analytics:local
+    build: ./analytics-service
+    environment:
+      <<: *aws-local
+      PORT: "8005"
+      AWS_SQS_URL: ""
+      SQS_DISABLED: "true"
+      LOCAL_MASTER_KEY: ${MASTER_KEY:?Execute scripts/setup-local.ps1}
+      LOCAL_SERVICE_API_KEY: ${SERVICE_API_KEY:?Execute scripts/setup-local.ps1}
+    volumes: [./scripts:/opt/togglemaster:ro]
+    ports: ["127.0.0.1:8005:8005"]
+    depends_on:
+      dynamodb: {condition: service_healthy}
+    healthcheck:
+      <<: *health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health', timeout=3)"]
+    networks: [local, access]
+    restart: unless-stopped
+
+networks:
+  local:
+    internal: true
+  access:
+    driver: bridge
+
+volumes:
+  auth-data:
+  service-data:
+  redis-data:
+  dynamodb-data:
