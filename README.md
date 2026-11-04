@@ -4,11 +4,11 @@ Infraestrutura, patches autorais e materiais de entrega do ToggleMaster. Os cód
 
 ## Microsserviços
 
-- [auth-service upstream](services/auth-service) — [FIAP-TCs](https://github.com/FIAP-TCs/auth-service)
-- [flag-service upstream](services/flag-service) — [FIAP-TCs](https://github.com/FIAP-TCs/flag-service)
-- [targeting-service upstream](services/targeting-service) — [FIAP-TCs](https://github.com/FIAP-TCs/targeting-service)
-- [evaluation-service upstream](services/evaluation-service) — [FIAP-TCs](https://github.com/FIAP-TCs/evaluation-service)
-- [analytics-service upstream](services/analytics-service) — [FIAP-TCs](https://github.com/FIAP-TCs/analytics-service)
+- [auth-service upstream FIAP-TCs, base `56e447f`](https://github.com/FIAP-TCs/auth-service/tree/56e447f83409bf35b22ef04a9e39c2e30df9af33)
+- [flag-service upstream FIAP-TCs, base `21052b1`](https://github.com/FIAP-TCs/flag-service/tree/21052b1abcf209ea6848350bdd9928b80b7f86fe)
+- [targeting-service upstream FIAP-TCs, base `dd9568a`](https://github.com/FIAP-TCs/targeting-service/tree/dd9568a583fa409b88a446685779d9e581282fd2)
+- [evaluation-service upstream FIAP-TCs, base `5e8ade0`](https://github.com/FIAP-TCs/evaluation-service/tree/5e8ade059f69650d2e8cfbefad0a83cfac25f0a9)
+- [analytics-service upstream FIAP-TCs, base `212d7e9`](https://github.com/FIAP-TCs/analytics-service/tree/212d7e9b7e50f881c4022bc9e8d2722f08a2a3e2)
 
 Os commits Git do repositório principal apontam para os submódulos nos commits-base necessários. As diferenças desenvolvidas localmente ficam em [patches/](patches/); a licença de redistribuição dos fontes não foi declarada pelos upstreams. Consulte [como obter as bases e aplicar as mudanças](patches/README.md).
 
