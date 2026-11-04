@@ -1,0 +1,50 @@
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+index 0000000..70da286
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1,8 @@
++.git
++.env
++.env.*
++!.env.example
++__pycache__
++*.pyc
++.venv
++local-evidence
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..376e175
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,19 @@
++
++FROM python:3.10-slim
++
++WORKDIR /app
++
++ENV PYTHONDONTWRITEBYTECODE=1
++ENV PYTHONUNBUFFERED=1
++ENV PORT=8002
++
++COPY requirements.txt .
++
++RUN pip install --no-cache-dir -r requirements.txt
++
++COPY app.py .
++
++EXPOSE 8002
++
++CMD ["gunicorn", "--bind", "0.0.0.0:8002", "app:app"]
+diff --git a/requirements.txt b/requirements.txt
+index 1b9caf8..4e8100a 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,0 +2 @@ Flask==2.2.2
++Werkzeug==2.2.3
+@@ -3,0 +5 @@ gunicorn==20.1.0
++setuptools==80.9.0
+@@ -5 +7 @@ python-dotenv==0.21.0
+-requests==2.28.1
+\ No newline at end of file
++requests==2.28.1

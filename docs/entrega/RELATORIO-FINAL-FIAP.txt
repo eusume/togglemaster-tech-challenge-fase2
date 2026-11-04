@@ -25,9 +25,10 @@ Referências aos upstreams FIAP-TCs (não são repositórios de autoria própria
 - evaluation-service: https://github.com/FIAP-TCs/evaluation-service
 - analytics-service: https://github.com/FIAP-TCs/analytics-service
 
-O repositório público contém infraestrutura, manifests, Compose, Dockerfiles
-autoriais e documentação; não contém os fontes dos cinco serviços. O commit
-inicial do snapshot limpo foi 31681a3f0ac6376356b5aa987a4053872ed2f358.
+O repositório público contém infraestrutura, manifests, Compose, Dockerfiles,
+patches autorais e documentação. Os cinco upstreams são referenciados por
+submódulos, sem cópia dos fontes-base no histórico principal. O commit inicial
+do snapshot limpo foi 31681a3f0ac6376356b5aa987a4053872ed2f358.
 
 3. VÍDEO DE DEMONSTRAÇÃO
 
@@ -76,17 +77,20 @@ do vídeo sem confirmação direta. Isso não afirma que nunca ocorreu.
 
 Docker Compose: cinco aplicações + quatro dependências, total nove:
 A: não verificado cena a cena.
-B: configuração docker-compose.yml pública; ela não inclui os fontes.
+B: configuração docker-compose.yml, submódulos upstream e patches autorais
+   publicados; a base continua mantida pela FIAP-TCs.
 C: execução local anterior registrada com 9/9 contêineres running/healthy.
-D: este snapshot sozinho não reconstrói os builds; requer fontes e alterações
-   locais dos serviços.
+D: não foi executado um novo Compose completo a partir de clone limpo nesta
+   revisão; requer clonar com submódulos e aplicar os patches documentados.
 
 Cinco microsserviços:
 A: aparição e contagem individual não verificadas no vídeo.
-B: resumo público EKS registra os cinco serviços implantados; README aponta
-   para os cinco upstreams FIAP-TCs.
+B: resumo público EKS registra os cinco serviços implantados; README e
+   submódulos apontam para os cinco upstreams FIAP-TCs, e os patches locais
+   estão publicados sem o histórico original.
 C: builds/execuções das versões de trabalho ficam nos repositórios locais.
-D: fontes e patches FIAP não estão neste repositório público.
+D: os fontes-base não foram copiados ao repositório principal por ausência de
+   licença declarada; clone raiz sem submódulos não contém esses fontes.
 
 Cluster EKS e Pods:
 A: apresentação visual não inspecionada.
@@ -192,13 +196,13 @@ publicado. A auditoria dos arquivos não encontrou chaves AWS, ARNs, IDs de
 conta, JWTs, chaves privadas ou DNS de recursos. Os valores AWS literais
 "local" no Compose são placeholders destinados a emuladores locais.
 
-Os diretórios de código FIAP-TCs foram excluídos. O Compose pressupõe os cinco
-diretórios de serviço, arquivos deles e valores locais em ambiente; as versões
-executadas também tinham alterações locais que não foram redistribuídas sem
-autorização. Portanto, clonar somente o snapshot não basta para executar os
-nove contêineres. O histórico de execução local 9/9 healthy existe, mas a
-reprodutibilidade do Compose público depende de obter legalmente os fontes e
-aplicar as alterações locais corretas.
+Os fontes-base não foram copiados para o repositório principal. Os cinco
+upstreams são submódulos nos commits-base usados para gerar os patches
+autorais, e os deltas estão publicados em `patches/`. Portanto, clone com
+`--recurse-submodules`, aplique os patches e gere o `.env` local conforme o
+README para preparar os contextos do Compose. O histórico de execução local
+9/9 healthy é anterior; esta publicação validou a configuração e construiu as
+cinco imagens, mas não iniciou os nove contêineres a partir de clone limpo.
 
 9. LIMITAÇÕES AWS ACADEMY E DURABILIDADE
 

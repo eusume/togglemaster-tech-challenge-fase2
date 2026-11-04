@@ -26,7 +26,7 @@ services:
       SERVICE_API_KEY: ${SERVICE_API_KEY:?Execute scripts/setup-local.ps1}
     volumes:
       - auth-data:/var/lib/postgresql/data
-      - ./auth-service/db/init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./services/auth-service/db/init.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./infra/postgres/auth-key.sh:/docker-entrypoint-initdb.d/02-key.sh:ro
     healthcheck:
       <<: *health
@@ -43,8 +43,8 @@ services:
     volumes:
       - service-data:/var/lib/postgresql/data
       - ./infra/postgres/data-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
-      - ./flag-service/db/init.sql:/opt/sql/flags.sql:ro
-      - ./targeting-service/db/init.sql:/opt/sql/targeting.sql:ro
+      - ./services/flag-service/db/init.sql:/opt/sql/flags.sql:ro
+      - ./services/targeting-service/db/init.sql:/opt/sql/targeting.sql:ro
     healthcheck:
       <<: *health
       test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d flags_db && pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d targeting_db']
@@ -75,7 +75,8 @@ services:
 
   auth-service:
     image: togglemaster-auth:local
-    build: ./auth-service
+    build:
+      context: ./services/auth-service
     environment:
       PORT: "8001"
       DATABASE_URL: postgres://togglemaster:${POSTGRES_PASSWORD}@postgres-auth:5432/auth_db?sslmode=disable
@@ -91,7 +92,8 @@ services:
 
   flag-service:
     image: togglemaster-flag:local
-    build: ./flag-service
+    build:
+      context: ./services/flag-service
     environment:
       PORT: "8002"
       DATABASE_URL: postgres://togglemaster:${POSTGRES_PASSWORD}@postgres-data:5432/flags_db?sslmode=disable
@@ -108,7 +110,8 @@ services:
 
   targeting-service:
     image: togglemaster-targeting:local
-    build: ./targeting-service
+    build:
+      context: ./services/targeting-service
     environment:
       PORT: "8003"
       DATABASE_URL: postgres://togglemaster:${POSTGRES_PASSWORD}@postgres-data:5432/targeting_db?sslmode=disable
@@ -125,7 +128,8 @@ services:
 
   evaluation-service:
     image: togglemaster-evaluation:local
-    build: ./evaluation-service
+    build:
+      context: ./services/evaluation-service
     environment:
       <<: *aws-local
       PORT: "8004"
@@ -147,7 +151,8 @@ services:
 
   analytics-service:
     image: togglemaster-analytics:local
-    build: ./analytics-service
+    build:
+      context: ./services/analytics-service
     environment:
       <<: *aws-local
       PORT: "8005"

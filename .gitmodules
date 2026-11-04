@@ -1,0 +1,15 @@
+[submodule "auth-service"]
+	path = services/auth-service
+	url = https://github.com/FIAP-TCs/auth-service.git
+[submodule "flag-service"]
+	path = services/flag-service
+	url = https://github.com/FIAP-TCs/flag-service.git
+[submodule "targeting-service"]
+	path = services/targeting-service
+	url = https://github.com/FIAP-TCs/targeting-service.git
+[submodule "evaluation-service"]
+	path = services/evaluation-service
+	url = https://github.com/FIAP-TCs/evaluation-service.git
+[submodule "analytics-service"]
+	path = services/analytics-service
+	url = https://github.com/FIAP-TCs/analytics-service.git

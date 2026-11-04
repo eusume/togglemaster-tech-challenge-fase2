@@ -1,0 +1,731 @@
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+index 0000000..70da286
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1,8 @@
++.git
++.env
++.env.*
++!.env.example
++__pycache__
++*.pyc
++.venv
++local-evidence
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..e844d90
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,25 @@
++FROM golang:1.21-bookworm AS builder
++
++WORKDIR /app
++
++COPY go.mod go.sum ./
++RUN --mount=type=cache,target=/go/pkg/mod go mod download
++
++COPY *.go ./
++RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
++    CGO_ENABLED=0 GOOS=linux go build -mod=readonly -trimpath -ldflags="-s -w" -o /evaluation-service .
++
++FROM alpine:3.20
++
++RUN apk add --no-cache ca-certificates
++
++WORKDIR /app
++
++COPY --from=builder /evaluation-service /app/evaluation-service
++
++ENV PORT=8004
++USER 10001:10001
++
++EXPOSE 8004
++
++CMD ["/app/evaluation-service"]
+diff --git a/Dockerfile.events-test b/Dockerfile.events-test
+new file mode 100644
+index 0000000..01766fb
+--- /dev/null
++++ b/Dockerfile.events-test
+@@ -0,0 +1,10 @@
++FROM golang:1.21-bookworm
++WORKDIR /test
++COPY go.mod go.sum ./
++RUN --mount=type=cache,target=/go/pkg/mod go mod download
++COPY *.go ./
++# Formatting applies only to this disposable build context; sources preserved.
++RUN gofmt -w *.go
++# Dependency download is complete. Only loopback is available to SDK tests.
++RUN --network=none --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
++    GOMAXPROCS=2 CGO_ENABLED=1 go test -race -p 2 -count=1 -v ./...
+diff --git a/Dockerfile.sdk-test b/Dockerfile.sdk-test
+new file mode 100644
+index 0000000..1fd964e
+--- /dev/null
++++ b/Dockerfile.sdk-test
+@@ -0,0 +1,8 @@
++FROM golang:1.21-bookworm
++WORKDIR /test
++COPY go.mod go.sum ./
++RUN go mod download
++COPY *.go ./
++RUN gofmt -w aws_credentials_test.go
++# Somente loopback para o agente ficticio; nenhum acesso AWS durante os testes.
++RUN --network=none CGO_ENABLED=0 go test -mod=readonly -v ./...
+diff --git a/EVENT-IDENTITY.md b/EVENT-IDENTITY.md
+new file mode 100644
+index 0000000..e58c2e3
+--- /dev/null
++++ b/EVENT-IDENTITY.md
+@@ -0,0 +1,41 @@
++# Stable identity from evaluation to analytics
++
++Each successful logical `/evaluate` operation constructs one `EvaluationEvent` **after the decision and before the asynchronous publication**. Its `event_id` is a cryptographically random UUID v4. Identity does not depend on user_id, flag_name, result or timestamp. Each independent HTTP request receives a fresh identity, including repeated requests with identical parameters.
++
++`publishEvaluationEvent` accepts the already constructed event by value. It never generates or replaces the ID or timestamp. A caller republishing the same event must retain the entire value (or its serialized body), rather than call `newEvaluationEvent` again. An event lacking identity/timestamp is rejected before SDK publication.
++
++The SDK serializes the same MessageBody for its internal retries. The service configures at most two SDK retries after the initial request; its asynchronous wrapper sets a total 10-second context deadline. No second application retry loop is layered on the SDK. Errors are logged with event_id and an error code, without payloads, credentials or raw SDK responses.
++
++| Operation | Identity |
++|---|---|
++| New successful HTTP evaluation | New UUID and timestamp |
++| SDK retry of SendMessage | Same UUID, timestamp and payload |
++| Explicit republication of the same event | Same UUID, timestamp and payload; SQS may assign a different MessageId |
++| Another HTTP request with the same user/flag | New UUID; it is a separate evaluation |
++| Decode and republish a previously serialized event | Preserve its original ID and all immutable fields |
++
++HTTP status codes and response JSON remain unchanged (`flag_name`, `user_id`, `result`). This does not add an HTTP Idempotency-Key protocol: a client repeating `/evaluate` is making another evaluation request.
++
++## Wire contract
++
++```json
++{
++  "event_id": "8d616cd2-fecf-49cb-adfc-e73ca349f7ed",
++  "user_id": "example-user",
++  "flag_name": "example-flag",
++  "result": true,
++  "timestamp": "2026-10-30T23:00:00.123456789Z"
++}
++```
++
++Schema: `contracts/evaluation-event.schema.json`. The only additive field is `event_id`; the prior four fields retain their names and types. Existing consumers that ignore unknown JSON fields remain compatible. The corrected analytics uses `producer:<event_id>` as its conditional DynamoDB partition key. Its fallback `sqs:<MessageId>` continues to support older producers/messages, including during rollout. SQS MessageId and ReceiptHandle are transport metadata, not producer event identity.
++
++Two distinct events may intentionally have identical business fields and timestamp; they must still have different IDs. Conversely, reuse of an ID with changed content is a conflict: analytics retains the message and does not overwrite the previous event.
++
++## Tests and limitations
++
++`Dockerfile.events-test` runs `go test -race -p 2 -count=1 -v ./...` with external network disabled for the test step. It exercises 200 concurrent independent evaluations, 50 concurrent republications, an SDK retry against an injected loopback HTTP500, serialization/entropy failures, deadlines and compatibility. Dependency download is a separate cached build step. The existing credential-chain test remains part of the suite.
++
++This change ensures stable identity and idempotent persistence for retried/delivered events, **not durable guaranteed publication**. Publication remains asynchronous, as before. If all attempts fail, the deadline expires, entropy generation fails, or the process dies before delivery, the HTTP decision is preserved and delivery is not guaranteed. No durable outbox, persistence of pending events, recovery after process death or HTTP deduplication was added. A future outbox/replay mechanism must persist and reuse the original event body/ID.
++
++SDK, Go version and dependencies are unchanged. Credentials still use the SDK provider chain. No AWS credentials are embedded. The service does not add arbitrary retries for non-retryable errors; classification remains the SDK's responsibility.
+diff --git a/README.md b/README.md
+index cfe4d02..5672c04 100644
+--- a/README.md
++++ b/README.md
+@@ -2,0 +3,2 @@
++Atualização: veja [EVENT-IDENTITY.md](EVENT-IDENTITY.md) para o event_id estável, contrato JSON, retries e limites de entrega assíncrona. A resposta HTTP continua igual.
++
+diff --git a/aws_credentials_test.go b/aws_credentials_test.go
+new file mode 100644
+index 0000000..896cf69
+--- /dev/null
++++ b/aws_credentials_test.go
+@@ -0,0 +1,63 @@
++package main
++
++import (
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"testing"
++	"time"
++
++	"github.com/aws/aws-sdk-go/aws"
++	"github.com/aws/aws-sdk-go/aws/session"
++)
++
++// Exerce o mesmo session.NewSession de main, sem credenciais de ambiente ou AWS.
++func TestPodCredentialChainAndTokenRotation(t *testing.T) {
++	directory := t.TempDir()
++	tokenPath := filepath.Join(directory, "token")
++	if err := os.WriteFile(tokenPath, []byte("local-token-one"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	calls := 0
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		token, err := os.ReadFile(tokenPath)
++		if err != nil || r.Header.Get("Authorization") != string(token) {
++			w.WriteHeader(403)
++			return
++		}
++		calls++
++		key := "local-key-one"
++		if calls > 1 {
++			key = "local-key-two"
++		}
++		w.Header().Set("Content-Type", "application/json")
++		json.NewEncoder(w).Encode(map[string]string{"AccessKeyId": key, "SecretAccessKey": "local-secret", "Token": "local-session", "Expiration": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)})
++	}))
++	defer server.Close()
++	for _, name := range []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_WEB_IDENTITY_TOKEN_FILE", "AWS_ROLE_ARN", "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"} {
++		t.Setenv(name, "")
++	}
++	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(directory, "absent"))
++	t.Setenv("AWS_CONFIG_FILE", filepath.Join(directory, "absent-config"))
++	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
++	t.Setenv("AWS_CONTAINER_CREDENTIALS_FULL_URI", server.URL)
++	t.Setenv("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", tokenPath)
++	sess, err := session.NewSession(&aws.Config{Region: aws.String("us-east-1")})
++	if err != nil {
++		t.Fatal(err)
++	}
++	first, err := sess.Config.Credentials.Get()
++	if err != nil || first.AccessKeyID != "local-key-one" {
++		t.Fatalf("provider inicial falhou: %v", err)
++	}
++	if err := os.WriteFile(tokenPath, []byte("local-token-two"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	sess.Config.Credentials.Expire()
++	second, err := sess.Config.Credentials.Get()
++	if err != nil || second.AccessKeyID != "local-key-two" || calls != 2 {
++		t.Fatalf("refresh falhou: %v", err)
++	}
++}
+diff --git a/contracts/evaluation-event.schema.json b/contracts/evaluation-event.schema.json
+new file mode 100644
+index 0000000..723d614
+--- /dev/null
++++ b/contracts/evaluation-event.schema.json
+@@ -0,0 +1,19 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "title": "ToggleMaster Evaluation Event: stable producer identity",
++  "type": "object",
++  "required": ["event_id", "user_id", "flag_name", "result", "timestamp"],
++  "properties": {
++    "event_id": {
++      "type": "string",
++      "format": "uuid",
++      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
++      "description": "Random UUID v4 created once per logical evaluation. Reuse unchanged on republication."
++    },
++    "user_id": {"type": "string"},
++    "flag_name": {"type": "string"},
++    "result": {"type": "boolean"},
++    "timestamp": {"type": "string", "format": "date-time", "description": "UTC RFC3339 timestamp created with the event; preserved on retry."}
++  },
++  "additionalProperties": true
++}
+diff --git a/evaluator.go b/evaluator.go
+index fcdc243..578b752 100644
+--- a/evaluator.go
++++ b/evaluator.go
+@@ -4 +3,0 @@ import (
+-	"context"
+@@ -11,0 +11 @@ import (
++	"os"
+diff --git a/events_test.go b/events_test.go
+new file mode 100644
+index 0000000..fa52666
+--- /dev/null
++++ b/events_test.go
+@@ -0,0 +1,283 @@
++package main
++
++import (
++	"context"
++	"crypto/md5"
++	"encoding/hex"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"regexp"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/aws/aws-sdk-go/aws"
++	"github.com/aws/aws-sdk-go/aws/client"
++	"github.com/aws/aws-sdk-go/aws/credentials"
++	"github.com/aws/aws-sdk-go/aws/request"
++	"github.com/aws/aws-sdk-go/aws/session"
++	"github.com/aws/aws-sdk-go/service/sqs"
++)
++
++type recordingSender struct {
++	mu       sync.Mutex
++	bodies   []string
++	callback func(aws.Context, int) error
++}
++
++func (s *recordingSender) SendMessageWithContext(ctx aws.Context, input *sqs.SendMessageInput, _ ...request.Option) (*sqs.SendMessageOutput, error) {
++	s.mu.Lock()
++	s.bodies = append(s.bodies, aws.StringValue(input.MessageBody))
++	index := len(s.bodies)
++	s.mu.Unlock()
++	if s.callback != nil {
++		if err := s.callback(ctx, index); err != nil {
++			return nil, err
++		}
++	}
++	return &sqs.SendMessageOutput{MessageId: aws.String(fmt.Sprintf("local-message-%d", index))}, nil
++}
++
++func eventForTest(t *testing.T) EvaluationEvent {
++	t.Helper()
++	event, err := newEvaluationEvent("same-user", "same-flag", true)
++	if err != nil {
++		t.Fatal(err)
++	}
++	return event
++}
++
++func TestNewLogicalEventHasRandomUUIDv4(t *testing.T) {
++	event := eventForTest(t)
++	if !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(event.EventID) {
++		t.Fatal("invalid UUID v4")
++	}
++	if event.Timestamp.Location() != time.UTC || event.UserID != "same-user" || event.FlagName != "same-flag" || !event.Result {
++		t.Fatal("event business fields changed")
++	}
++}
++
++func TestIndependentEvaluationsRemainDistinctWithIdenticalFieldsAndClock(t *testing.T) {
++	first, second := eventForTest(t), eventForTest(t)
++	second.Timestamp = first.Timestamp
++	if first.EventID == second.EventID {
++		t.Fatal("independent events shared identity")
++	}
++}
++
++func TestConcurrentIndependentEvaluations(t *testing.T) {
++	const count = 200
++	sender := &recordingSender{}
++	var wg sync.WaitGroup
++	for i := 0; i < count; i++ {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			event, err := newEvaluationEvent("same-user", "same-flag", true)
++			if err == nil {
++				err = publishEvaluationEvent(context.Background(), sender, "http://local.invalid/queue", event)
++			}
++			if err != nil {
++				t.Error(err)
++			}
++		}()
++	}
++	wg.Wait()
++	ids := map[string]bool{}
++	for _, body := range sender.bodies {
++		var event EvaluationEvent
++		if err := json.Unmarshal([]byte(body), &event); err != nil {
++			t.Fatal(err)
++		}
++		ids[event.EventID] = true
++	}
++	if len(ids) != count {
++		t.Fatalf("want %d independent events, got %d", count, len(ids))
++	}
++}
++
++func TestRepublicationAfterAmbiguousFailurePreservesWholeEvent(t *testing.T) {
++	sender := &recordingSender{callback: func(_ aws.Context, attempt int) error {
++		if attempt == 1 {
++			return errors.New("local ambiguous publication result")
++		}
++		return nil
++	}}
++	event := eventForTest(t)
++	before := event
++	if publishEvaluationEvent(context.Background(), sender, "http://local.invalid/queue", event) == nil {
++		t.Fatal("expected first publication failure")
++	}
++	if err := publishEvaluationEvent(context.Background(), sender, "http://local.invalid/queue", event); err != nil {
++		t.Fatal(err)
++	}
++	if sender.bodies[0] != sender.bodies[1] || event != before {
++		t.Fatal("retry changed event identity, timestamp or content")
++	}
++}
++
++func TestConcurrentRepublicationOfOneEvent(t *testing.T) {
++	event := eventForTest(t)
++	sender := &recordingSender{}
++	var wg sync.WaitGroup
++	for i := 0; i < 50; i++ {
++		wg.Add(1)
++		go func() {
++			defer wg.Done()
++			if err := publishEvaluationEvent(context.Background(), sender, "http://local.invalid/queue", event); err != nil {
++				t.Error(err)
++			}
++		}()
++	}
++	wg.Wait()
++	for _, body := range sender.bodies {
++		if body != sender.bodies[0] {
++			t.Fatal("concurrent retry changed payload")
++		}
++	}
++}
++
++func TestPublisherRejectsUnidentifiedEventInsteadOfGeneratingNewID(t *testing.T) {
++	sender := &recordingSender{}
++	event := eventForTest(t)
++	event.EventID = ""
++	if publishEvaluationEvent(context.Background(), sender, "http://local.invalid/queue", event) == nil || len(sender.bodies) != 0 {
++		t.Fatal("unidentified event was sent")
++	}
++}
++
++func TestPublisherRejectsMissingTimestamp(t *testing.T) {
++	event := eventForTest(t)
++	event.Timestamp = time.Time{}
++	sender := &recordingSender{}
++	if publishEvaluationEvent(context.Background(), sender, "http://local.invalid/queue", event) == nil || len(sender.bodies) != 0 {
++		t.Fatal("event timestamp was generated during retry")
++	}
++}
++
++func TestSerializationFailureDoesNotPublish(t *testing.T) {
++	event := eventForTest(t)
++	event.Timestamp = time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)
++	sender := &recordingSender{}
++	if publishEvaluationEvent(context.Background(), sender, "http://local.invalid/queue", event) == nil || len(sender.bodies) != 0 {
++		t.Fatal("invalid serialization was sent")
++	}
++}
++
++func TestEntropyFailureReturnsNoIdentity(t *testing.T) {
++	id, err := newEventID(strings.NewReader("short"))
++	if err == nil || id != "" {
++		t.Fatal("entropy failure fabricated identity")
++	}
++}
++
++func TestPublicationContextDeadline(t *testing.T) {
++	sender := &recordingSender{callback: func(ctx aws.Context, _ int) error {
++		<-ctx.Done()
++		return ctx.Err()
++	}}
++	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
++	defer cancel()
++	if err := publishEvaluationEvent(ctx, sender, "http://local.invalid/queue", eventForTest(t)); !errors.Is(err, context.DeadlineExceeded) {
++		t.Fatalf("deadline not propagated: %v", err)
++	}
++}
++
++func TestAsynchronousWrapperSetsDeadline(t *testing.T) {
++	sender := &recordingSender{callback: func(ctx aws.Context, _ int) error {
++		deadline, ok := ctx.Deadline()
++		if !ok || time.Until(deadline) > 10*time.Second {
++			t.Error("publication has no bounded deadline")
++		}
++		return nil
++	}}
++	app := &App{SqsSvc: sender, SqsQueueURL: "http://local.invalid/queue"}
++	app.sendEvaluationEvent(eventForTest(t))
++}
++
++func TestDisabledPublicationRemainsSafe(t *testing.T) {
++	(&App{}).sendEvaluationEvent(eventForTest(t))
++	sender := &recordingSender{}
++	(&App{SqsSvc: sender}).sendEvaluationEvent(eventForTest(t))
++	if len(sender.bodies) != 0 {
++		t.Fatal("disabled publication called SDK")
++	}
++}
++
++func TestEventContractIsAdditiveAndPreservesFalse(t *testing.T) {
++	event := eventForTest(t)
++	event.Result = false
++	body, _ := json.Marshal(event)
++	var legacy struct {
++		UserID string `json:"user_id"`
++		FlagName string `json:"flag_name"`
++		Result bool `json:"result"`
++		Timestamp time.Time `json:"timestamp"`
++	}
++	if err := json.Unmarshal(body, &legacy); err != nil || legacy.UserID != event.UserID || legacy.FlagName != event.FlagName || legacy.Result || !legacy.Timestamp.Equal(event.Timestamp) {
++		t.Fatal("legacy JSON fields incompatible")
++	}
++}
++
++func TestHealthContractUnchanged(t *testing.T) {
++	recorder := httptest.NewRecorder()
++	(&App{}).healthHandler(recorder, httptest.NewRequest(http.MethodGet, "/health", nil))
++	if recorder.Code != 200 || strings.TrimSpace(recorder.Body.String()) != `{"status":"ok"}` {
++		t.Fatal("health response changed")
++	}
++}
++
++func TestRealSDKRetryPreservesSerializedEvent(t *testing.T) {
++	var mu sync.Mutex
++	var bodies []string
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		var payload string
++		isJSON := strings.Contains(r.Header.Get("Content-Type"), "json")
++		if isJSON {
++			var input map[string]interface{}
++			json.NewDecoder(r.Body).Decode(&input)
++			payload, _ = input["MessageBody"].(string)
++		} else {
++			r.ParseForm()
++			payload = r.Form.Get("MessageBody")
++		}
++		mu.Lock()
++		bodies = append(bodies, payload)
++		attempt := len(bodies)
++		mu.Unlock()
++		if attempt == 1 {
++			w.WriteHeader(500)
++			if isJSON {
++				fmt.Fprint(w, `{"__type":"InternalError","message":"injected failure after accepting body"}`)
++			} else {
++				fmt.Fprint(w, `<ErrorResponse><Error><Code>InternalError</Code><Message>local test</Message></Error></ErrorResponse>`)
++			}
++			return
++		}
++		sum := md5.Sum([]byte(payload))
++		checksum := hex.EncodeToString(sum[:])
++		if isJSON {
++			w.Header().Set("Content-Type", "application/x-amz-json-1.0")
++			json.NewEncoder(w).Encode(map[string]string{"MD5OfMessageBody": checksum, "MessageId": "local-message"})
++		} else {
++			fmt.Fprintf(w, `<SendMessageResponse><SendMessageResult><MD5OfMessageBody>%s</MD5OfMessageBody><MessageId>local-message</MessageId></SendMessageResult></SendMessageResponse>`, checksum)
++		}
++	}))
++	defer server.Close()
++	sess, err := session.NewSession(&aws.Config{Region: aws.String("us-east-1"), Endpoint: aws.String(server.URL), Credentials: credentials.NewStaticCredentials("local", "local", ""), Retryer: client.DefaultRetryer{NumMaxRetries: 2, MinRetryDelay: time.Millisecond, MaxRetryDelay: 2*time.Millisecond}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := publishEvaluationEvent(context.Background(), sqs.New(sess), server.URL+"/queue", eventForTest(t)); err != nil {
++		t.Fatal(err)
++	}
++	mu.Lock()
++	defer mu.Unlock()
++	if len(bodies) != 2 || bodies[0] == "" || bodies[0] != bodies[1] {
++		t.Fatal("real SDK retry changed message body")
++	}
++}
+diff --git a/go.mod b/go.mod
+index 93ff2a4..2f88bf9 100644
+--- a/go.mod
++++ b/go.mod
+@@ -18 +18 @@ require (
+-)
+\ No newline at end of file
++)
+diff --git a/go.sum b/go.sum
+index 93ff2a4..99fc927 100644
+--- a/go.sum
++++ b/go.sum
+@@ -1,18 +1,44 @@
+-module evaluation-service
+-
+-go 1.21
+-
+-require (
+-	github.com/aws/aws-sdk-go v1.51.10
+-	github.com/go-redis/redis/v8 v8.11.5
+-	github.com/joho/godotenv v1.5.1
+-)
+-
+-require (
+-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+-	github.com/jmespath/go-jmespath v0.4.0 // indirect
+-	github.com/onsi/ginkgo v1.16.5 // indirect
+-	github.com/onsi/gomega v1.27.6 // indirect
+-	golang.org/x/net v0.21.0 // indirect
+-)
+\ No newline at end of file
++github.com/aws/aws-sdk-go v1.51.10 h1:/g8K1SllwdCnsVw2BFXsYd+TS5P75skj5a8QFbfdW0U=
++github.com/aws/aws-sdk-go v1.51.10/go.mod h1:LF8svs817+Nz+DmiMQKTO3ubZ/6IaTpq3TjupRn3Eqk=
++github.com/cespare/xxhash/v2 v2.2.0 h1:DC2CZ1Ep5Y4k3ZQ899DldepgrayRUGE6BBZ/cd9Cj44=
++github.com/cespare/xxhash/v2 v2.2.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
++github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
++github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
++github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
++github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWoS4=
++github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
++github.com/go-redis/redis/v8 v8.11.5 h1:AcZZR7igkdvfVmQTPnu9WE37LRrO/YrBH5zWyjDC0oI=
++github.com/go-redis/redis/v8 v8.11.5/go.mod h1:gREzHqY1hg6oD9ngVRbLStwAWKhA0FEgq8Jd4h5lpwo=
++github.com/google/go-cmp v0.5.9 h1:O2Tfq5qg4qc4AmwVlvv0oLiVAGB7enBSJ2x2DqQFi38=
++github.com/google/go-cmp v0.5.9/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
++github.com/jmespath/go-jmespath v0.4.0 h1:BEgLn5cpjn8UN1mAw4NjwDrS35OdebyEtFe+9YPoQUg=
++github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHWvzYPziyZiYoo=
++github.com/jmespath/go-jmespath/internal/testify v1.5.1 h1:shLQSRRSCCPj3f2gpwzGwWFoC7ycTf1rcQZHOlsJ6N8=
++github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
++github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
++github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
++github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
++github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
++github.com/onsi/ginkgo v1.16.5 h1:8xi0RTUf59SOSfEtZMvwTvXYMzG4gV23XVHOZiXNtnE=
++github.com/onsi/ginkgo v1.16.5/go.mod h1:+E8gABHa3K6zRBolWtd+ROzc/U5bkGt0FwiG042wbpU=
++github.com/onsi/gomega v1.27.6 h1:ENqfyGeS5AX/rlXDd/ETokDz93u0YufY1Pgxuy/PvWE=
++github.com/onsi/gomega v1.27.6/go.mod h1:PIQNjfQwkP3aQAH7lf7j87O/5FiNr+ZR8+ipb+qQlhg=
++github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
++github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
++github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
++golang.org/x/net v0.21.0 h1:AQyQV4dYCvJ7vGmJyKki9+PBdyvhkSd8EIx/qb0AYv4=
++golang.org/x/net v0.21.0/go.mod h1:bIjVDfnllIU7BJ2DNgfnXvpSvtn8VRwhlsaeUTyUS44=
++golang.org/x/sys v0.17.0 h1:25cE3gD+tdBA7lp7QfhuV+rJiE9YXTcS3VG1SqssI/Y=
++golang.org/x/sys v0.17.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
++golang.org/x/text v0.14.0 h1:ScX5w1eTa3QqT8oi6+ziP7dTV1S2+ALU0bI+0zXKWiQ=
++golang.org/x/text v0.14.0/go.mod h1:18ZOQIKpY8NJVqYksKHtTdi31H5itFRjB5/qKTNYzSU=
++gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
++gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 h1:uRGJdciOHaEIrze2W8Q3AKkepLTh2hOroT7a+7czfdQ=
++gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7/go.mod h1:dt/ZhP58zS4L8KSrWDmTeBkI65Dw0HsyUHuEVlX15mw=
++gopkg.in/yaml.v2 v2.2.8/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
++gopkg.in/yaml.v2 v2.4.0 h1:D8xgwECY7CYvx+Y2n4sBz93Jn9JRvxdiyyo8CTfuKaY=
++gopkg.in/yaml.v2 v2.4.0/go.mod h1:RDklbk79AGWmwhnvt/jBztapEOGDOx6ZbXqjP6csGnQ=
++gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
++gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+diff --git a/handlers.go b/handlers.go
+index 7c43342..3dd3622 100644
+--- a/handlers.go
++++ b/handlers.go
+@@ -49 +49,7 @@ func (a *App) evaluationHandler(w http.ResponseWriter, r *http.Request) {
+-	go a.sendEvaluationEvent(userID, flagName, result)
++	event, eventErr := newEvaluationEvent(userID, flagName, result)
++	if eventErr != nil {
++		// Preserve the decision response, as with an asynchronous SQS failure.
++		log.Println("Event identity generation failed; event not published")
++	} else {
++		go a.sendEvaluationEvent(event)
++	}
+@@ -58 +64 @@ func (a *App) evaluationHandler(w http.ResponseWriter, r *http.Request) {
+-}
+\ No newline at end of file
++}
+diff --git a/main.go b/main.go
+index 63a8ec7..0f5f105 100644
+--- a/main.go
++++ b/main.go
+@@ -23 +23 @@ type App struct {
+-	SqsSvc              *sqs.SQS
++	SqsSvc              eventSender
+@@ -78 +78 @@ func main() {
+-	var sqsSvc *sqs.SQS
++	var sqsSvc eventSender
+@@ -84 +84,5 @@ func main() {
+-		sqsSvc = sqs.New(sess)
++		config := aws.NewConfig().WithMaxRetries(2)
++		if endpoint := os.Getenv("AWS_ENDPOINT_URL_SQS"); endpoint != "" {
++			config.WithEndpoint(endpoint)
++		}
++		sqsSvc = sqs.New(sess, config)
+@@ -112 +116 @@ func main() {
+-}
+\ No newline at end of file
++}
+diff --git a/sqs.go b/sqs.go
+index 50aacdc..a26f0a4 100644
+--- a/sqs.go
++++ b/sqs.go
+@@ -3,0 +4,2 @@ import (
++	"context"
++	"crypto/rand"
+@@ -4,0 +7,2 @@ import (
++	"fmt"
++	"io"
+@@ -8,0 +13,2 @@ import (
++	"github.com/aws/aws-sdk-go/aws/awserr"
++	"github.com/aws/aws-sdk-go/aws/request"
+@@ -13,0 +20 @@ type EvaluationEvent struct {
++	EventID   string    `json:"event_id"`
+@@ -20,6 +27,8 @@ type EvaluationEvent struct {
+-// sendEvaluationEvent envia um evento para a fila SQS
+-func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
+-	// Se a URL da fila não foi configurada, apenas loga localmente e sai.
+-	if a.SqsSvc == nil || a.SqsQueueURL == "" {
+-		log.Printf("[SQS_DISABLED] Evento: User '%s', Flag '%s', Result '%t'", userID, flagName, result)
+-		return
++type eventSender interface {
++	SendMessageWithContext(aws.Context, *sqs.SendMessageInput, ...request.Option) (*sqs.SendMessageOutput, error)
++}
++
++func newEventID(source io.Reader) (string, error) {
++	var id [16]byte
++	if _, err := io.ReadFull(source, id[:]); err != nil {
++		return "", fmt.Errorf("generate event identity: %w", err)
+@@ -26,0 +36,4 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
++	id[6] = (id[6] & 0x0f) | 0x40 // UUID v4; no business fields or clock in identity.
++	id[8] = (id[8] & 0x3f) | 0x80
++	return fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16]), nil
++}
+@@ -28,5 +41,4 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
+-	event := EvaluationEvent{
+-		UserID:    userID,
+-		FlagName:  flagName,
+-		Result:    result,
+-		Timestamp: time.Now().UTC(),
++func newEvaluationEvent(userID, flagName string, result bool) (EvaluationEvent, error) {
++	id, err := newEventID(rand.Reader)
++	if err != nil {
++		return EvaluationEvent{}, err
+@@ -33,0 +46,2 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
++	return EvaluationEvent{EventID: id, UserID: userID, FlagName: flagName, Result: result, Timestamp: time.Now().UTC()}, nil
++}
+@@ -34,0 +49,6 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
++// publishEvaluationEvent never creates an identity. Republishing the same value
++// preserves both ID and timestamp, including when a previous result was ambiguous.
++func publishEvaluationEvent(ctx context.Context, sender eventSender, queueURL string, event EvaluationEvent) error {
++	if event.EventID == "" || event.Timestamp.IsZero() {
++		return fmt.Errorf("event identity and timestamp must be created before publication")
++	}
+@@ -37,2 +57 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
+-		log.Printf("Erro ao serializar evento SQS: %v", err)
+-		return
++		return err
+@@ -40,3 +59 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
+-
+-	// Envia a mensagem
+-	_, err = a.SqsSvc.SendMessage(&sqs.SendMessageInput{
++	_, err = sender.SendMessageWithContext(ctx, &sqs.SendMessageInput{
+@@ -44 +61 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
+-		QueueUrl:    aws.String(a.SqsQueueURL),
++		QueueUrl:    aws.String(queueURL),
+@@ -45,0 +63,2 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
++	return err
++}
+@@ -47,2 +66,17 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
+-	if err != nil {
+-		log.Printf("Erro ao enviar mensagem para SQS: %v", err)
++// Asynchronous delivery is bounded; SDK retries reuse the serialized event.
++// A process crash still needs a durable outbox, which is outside this change.
++func (a *App) sendEvaluationEvent(event EvaluationEvent) {
++	// Se a URL da fila não foi configurada, apenas loga localmente e sai.
++	if a.SqsSvc == nil || a.SqsQueueURL == "" {
++		log.Println("[SQS_DISABLED] Event publication disabled")
++		return
++	}
++
++	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
++	defer cancel()
++	if err := publishEvaluationEvent(ctx, a.SqsSvc, a.SqsQueueURL, event); err != nil {
++		code := "publication_error"
++		if sdkError, ok := err.(awserr.Error); ok {
++			code = sdkError.Code()
++		}
++		log.Printf("Event publication failed: event_id=%s code=%s", event.EventID, code)
+@@ -50 +84 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
+-		log.Printf("Evento de avaliação enviado para SQS (Flag: %s)", flagName)
++		log.Printf("Event published: event_id=%s", event.EventID)
+@@ -52 +86 @@ func (a *App) sendEvaluationEvent(userID, flagName string, result bool) {
+-}
+\ No newline at end of file
++}
